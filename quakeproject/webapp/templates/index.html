@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Worldwide Earthquake Forecaster</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- jQuery and Bootstrap -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+  <!-- Google Maps API -->
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBQBHwsQPm_lxm-SaFPl0Q8ols-_kxtTGU&libraries=visualization&callback=initMap">
+  </script>
+
+  <style>
+    body, html {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to right, #1d2b64, #f8cdda);
+      overflow-x: hidden;
+    }
+    header {
+      text-align: center;
+      padding: 20px 0;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 2.8rem;
+      font-weight: bold;
+    }
+    #map-card {
+      margin: 30px auto;
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      max-width: 1100px;
+      box-shadow: 0px 8px 30px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 1.2s ease;
+    }
+    #map {
+      height: 500px;
+      width: 100%;
+      border-radius: 10px;
+      transition: transform 0.4s ease;
+    }
+    #map:hover {
+      transform: scale(1.01);
+    }
+    #controls {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .btn-custom {
+      margin: 10px;
+      background-color: #ff7043;
+      color: white;
+      border-radius: 25px;
+      padding: 10px 25px;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+    .btn-custom:hover {
+      background-color: #e64a19;
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(230, 74, 25, 0.6);
+    }
+    .slidecontainer {
+      width: 90%;
+      max-width: 700px;
+      background: #fff;
+      padding: 25px;
+      border-radius: 20px;
+      margin: 30px auto;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    }
+    /* Fade In Animation */
+    @keyframes fadeIn {
+      from {opacity: 0;}
+      to {opacity: 1;}
+    }
+    /* Snackbar */
+    #snackbar {
+      visibility: hidden;
+      min-width: 250px;
+      margin-left: -125px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 10px;
+      padding: 16px;
+      position: fixed;
+      z-index: 1;
+      left: 50%;
+      bottom: 30px;
+      font-size: 17px;
+    }
+    #snackbar.show {
+      visibility: visible;
+      animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    }
+    @keyframes fadein {
+      from {bottom: 0; opacity: 0;} 
+      to {bottom: 30px; opacity: 1;}
+    }
+    @keyframes fadeout {
+      from {bottom: 30px; opacity: 1;} 
+      to {bottom: 0; opacity: 0;}
+    }
+    /* Fixed Labels Styling */
+    #legend {
+      background: white;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      border: 1px solid black;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      position: fixed;
+      top: 100px;
+      right: 300px;
+      z-index: 999;
+    }
+    #legend div {
+      margin-bottom: 8px;
+    }
+    #legend span {
+      display: inline-block;
+      width: 18px;
+      height: 10px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>🌍 Earthquake Prediction Dashboard</h1>
+</header>
+
+<div id="controls">
+  <button class="btn btn-custom" onclick="toggleHeatmap()">Toggle Heatmap</button>
+  <button class="btn btn-custom" onclick="changeGradient()">Change Gradient</button>
+</div>
+
+<div id="map-card">
+  <h4 class="text-center mb-4">📍 Live Earthquake Activity Map</h4>
+  <div id="map"></div>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div><span id="low-activity" style="background-color: blue;"></span> Low Activity</div>
+  <div><span id="medium-activity" style="background-color: yellow;"></span> Medium Activity</div>
+  <div><span id="high-activity" style="background-color: red;"></span> High Activity</div>
+</div>
+
+<div class="slidecontainer">
+  <form id="submit_params" method="POST" action="{% url 'build_page' %}">
+    {% csrf_token %}
+    <div class="form-group">
+      <label><strong>Select Future Date:</strong> 
+        <span id="label_slider_value">{{date_horizon}}</span>
+      </label>
+      <input type="range" min="0" max="{{days_out_to_predict}}" value="{{current_value}}" 
+        name="slider_date_horizon" id="slider_date_horizon" step="1" class="form-control-range">
+    </div>
+  </form>
+</div>
+
+<!-- Snackbar -->
+<div id="snackbar">Map Loaded Successfully!</div>
+
+<script>
+  var map, heatmap;
+  var usingAlternateGradient = false;
+
+  function initMap() {
+    map = new google.maps.Map(document.getElementById('map'), {
+      zoom: 2,
+      center: { lat: 0, lng: 0 },
+      mapTypeId: 'roadmap',
+      disableDefaultUI: false,
+      zoomControl: true,
+    });
+
+    heatmap = new google.maps.visualization.HeatmapLayer({
+      data: getPoints(),
+      map: map,
+      radius: 30,
+      opacity: 0.8,
+      dissipating: true,
+      gradient: defaultGradient
+    });
+
+    showSnackbar();
+  }
+
+  const defaultGradient = [
+    'rgba(0, 0, 255, 0)',
+    'rgba(0, 0, 255, 0.5)',
+    'rgba(0, 255, 0, 0.6)',
+    'rgba(255, 255, 0, 0.7)',
+    'rgba(255, 140, 0, 0.8)',
+    'rgba(255, 69, 0, 0.9)',
+    'rgba(255, 0, 0, 1)',
+    'rgba(128, 0, 0, 1)'
+  ];
+
+  const alternateGradient = [
+    'rgba(0, 255, 255, 0)',
+    'rgba(0, 255, 255, 1)',
+    'rgba(0, 191, 255, 1)',
+    'rgba(0, 127, 255, 1)',
+    'rgba(0, 63, 255, 1)',
+    'rgba(0, 0, 255, 1)',
+    'rgba(0, 0, 223, 1)',
+    'rgba(0, 0, 191, 1)',
+    'rgba(0, 0, 159, 1)',
+    'rgba(0, 0, 127, 1)',
+    'rgba(63, 0, 91, 1)',
+    'rgba(127, 0, 63, 1)',
+    'rgba(191, 0, 31, 1)',
+    'rgba(255, 0, 0, 1)'
+  ];
+
+  function toggleHeatmap() {
+    heatmap.setMap(heatmap.getMap() ? null : map);
+  }
+
+  function changeGradient() {
+    usingAlternateGradient = !usingAlternateGradient;
+    heatmap.set('gradient', usingAlternateGradient ? alternateGradient : defaultGradient);
+    updateLegendColors();
+  }
+
+  function getPoints() {
+    return [{{earthquake_horizon}}];
+  }
+
+  function showSnackbar() {
+    var x = document.getElementById("snackbar");
+    x.className = "show";
+    setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+  }
+
+  function updateLegendColors() {
+    document.getElementById('low-activity').style.backgroundColor = usingAlternateGradient ? 'cyan' : 'blue';
+    document.getElementById('medium-activity').style.backgroundColor = usingAlternateGradient ? 'blue' : 'yellow';
+    document.getElementById('high-activity').style.backgroundColor = usingAlternateGradient ? 'red' : 'red';
+  }
+
+  // Slider logic
+  var slider1 = document.getElementById("slider_date_horizon");
+  var output1 = document.getElementById("label_slider_value");
+
+  slider1.onmouseup = function () {
+    document.getElementById("submit_params").submit();
+  }
+
+  slider1.oninput = function() {
+    var horizon_date = new Date();
+    horizon_date.setDate(horizon_date.getDate() + Math.trunc(parseInt(this.value)));
+    output1.innerHTML = (horizon_date.getMonth() + 1) + "/" + horizon_date.getDate() + "/" + horizon_date.getFullYear();
+  }
+</script>
+
+</body>
+</html>
