@@ -29,11 +29,17 @@ This project leverages machine learning models to predict potential earthquake e
 
 #### Project Structure
 Earthquake-Prediction/
+
 ├── data/             # Raw and processed earthquake data (CSV)
+
 │   └── database/     # SQLite database
+
 ├── models/           # Trained machine learning models
+
 ├── quakeproject/     # Django project
-│   └── webapp/       # Django app with views and templates        
+
+│   └── webapp/       # Django app with views and templates  
+      
 └── README.md         # Project documentation
 
 #### Setup
@@ -62,7 +68,9 @@ Run the Django server:
 Access the web application at http://127.0.0.1:8000/.
 
 ##### Authors
-Shakti Sagar Samantaray
+**Shakti Sagar Samantaray**
+
 MCA (ITER, SOA University)
+
 [GitHub Profile](https://github.com/shaktisagar14)
 
